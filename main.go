@@ -29,19 +29,19 @@ import (
 // 5 mins 300
 const (
 	baseURL          = "https://www.linkedin.com/jobs/search/?"
-	keywords         = "Engineer OR Developer AND (Golang OR Typescript OR React)"
 	geoId            = "103644278" // USA
 	remote           = "2"         // remote
 	secondsSincePost = 600         // 10 minutes
 	s3Bucket         = "slinkedin-jobs"
 	s3Key            = "sent_jobs.json"
-	location         = "San Antonio"
-	distance         = "100"
 	maxApplicants    = 50
 )
 
 type Event struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
+	Keywords string `json:"keywords"`
+	Location string `json:"location"`
+	Distance string `json:"distance"`
 }
 
 // Job represents a LinkedIn job post
@@ -124,19 +124,19 @@ func cleanURL(rawURL string) (string, error) {
 	return parsedURL.String(), nil
 }
 
-func buildURL(locationType string) *url.URL {
+func buildURL(locationType string, event Event) *url.URL {
 	u, _ := url.Parse(baseURL)
 	params := url.Values{}
 	if locationType == "remote" {
 		params.Set("geoId", geoId)
 		params.Set("f_WT", remote)
-		params.Set("keywords", keywords)
+		params.Set("keywords", event.Keywords)
 		params.Set("f_TPR", "r"+strconv.Itoa(secondsSincePost))
 	} else {
-		params.Set("keywords", keywords)
+		params.Set("keywords", event.Keywords)
 		params.Set("f_TPR", "r"+strconv.Itoa(secondsSincePost))
-		params.Set("location", location)
-		params.Set("distance", distance)
+		params.Set("location", event.Location)
+		params.Set("distance", event.Distance)
 	}
 	u.RawQuery = params.Encode()
 	return u
@@ -182,8 +182,8 @@ func saveSentURNs(ctx context.Context, s3Client *s3.Client, bucket, key string, 
 	return err
 }
 
-func FetchLinkedInJobs(locationType string) (jobs []Job, err error) {
-	url := buildURL(locationType)
+func FetchLinkedInJobs(locationType string, event Event) (jobs []Job, err error) {
+	url := buildURL(locationType, event)
 	fmt.Printf("Checking jobs on %s\n", url)
 
 	client := &http.Client{
@@ -333,7 +333,7 @@ func handler(ctx context.Context, event Event) error {
 		return fmt.Errorf("failed to load sent URNs: %v", err)
 	}
 
-	remoteJobs, err := FetchLinkedInJobs("remote")
+	remoteJobs, err := FetchLinkedInJobs("remote", event)
 	if err != nil {
 		return fmt.Errorf("failed to fetch jobs: %v", err)
 	}
@@ -352,7 +352,7 @@ func handler(ctx context.Context, event Event) error {
 		fmt.Println("No new remote jobs to send.")
 	}
 
-	localJobs, err := FetchLinkedInJobs("local")
+	localJobs, err := FetchLinkedInJobs("local", event)
 	if err != nil {
 		return fmt.Errorf("failed to fetch local jobs: %v", err)
 	}
