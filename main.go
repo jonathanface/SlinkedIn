@@ -38,10 +38,11 @@ const (
 )
 
 type Event struct {
-	Email    string `json:"email"`
-	Keywords string `json:"keywords"`
-	Location string `json:"location"`
-	Distance string `json:"distance"`
+	Email          string   `json:"email"`
+	Keywords       string   `json:"keywords"`
+	Location       string   `json:"location"`
+	Distance       string   `json:"distance"`
+	BlockedPosters []string `json:"blockedPosters"`
 }
 
 // Job represents a LinkedIn job post
@@ -79,11 +80,6 @@ var languages = []string{
 	"en-AU,en;q=0.9",
 	"en-CA,en;q=0.9",
 }
-var blockedPosters = map[string]string{
-	"DataAnnotation": "true",
-	"Jobs via Dice":  "true",
-	"Jobot":          "true",
-}
 var blockedTitles = []string{
 	"intern",
 	"sales",
@@ -93,6 +89,7 @@ var blockedTitles = []string{
 	"support",
 	"junior",
 	"entry",
+	"tutor",
 }
 
 func getRandomReferer() string {
@@ -288,7 +285,7 @@ func SendEmail(remoteJobs []Job, localJobs []Job, sesClient *ses.Client, ctx con
 	return err
 }
 
-func filterResults(jobs []Job) []Job {
+func filterResults(jobs []Job, blockedPosters map[string]bool) []Job {
 	var newJobs []Job
 
 	for _, job := range jobs {
@@ -307,7 +304,7 @@ func filterResults(jobs []Job) []Job {
 		}
 
 		// Check for blocked company
-		if _, found := blockedPosters[job.Company]; found {
+		if blockedPosters[job.Company] {
 			fmt.Printf("Filtered out job from poster: %s\n", job.Company)
 			continue // Skip this job
 		}
@@ -333,6 +330,11 @@ func handler(ctx context.Context, event Event) error {
 		return fmt.Errorf("failed to load sent URNs: %v", err)
 	}
 
+	blockedPosters := make(map[string]bool, len(event.BlockedPosters))
+	for _, p := range event.BlockedPosters {
+		blockedPosters[p] = true
+	}
+
 	remoteJobs, err := FetchLinkedInJobs("remote", event)
 	if err != nil {
 		return fmt.Errorf("failed to fetch jobs: %v", err)
@@ -346,7 +348,7 @@ func handler(ctx context.Context, event Event) error {
 		}
 	}
 
-	filteredRemoteJobs := filterResults((newRemoteJobs))
+	filteredRemoteJobs := filterResults(newRemoteJobs, blockedPosters)
 
 	if len(filteredRemoteJobs) == 0 {
 		fmt.Println("No new remote jobs to send.")
@@ -365,7 +367,7 @@ func handler(ctx context.Context, event Event) error {
 		}
 	}
 
-	filteredLocalJobs := filterResults((newLocalJobs))
+	filteredLocalJobs := filterResults(newLocalJobs, blockedPosters)
 	if len(filteredLocalJobs) == 0 {
 		fmt.Println("No new local jobs to send.")
 	}

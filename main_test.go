@@ -126,7 +126,12 @@ func TestFilterResults(t *testing.T) {
 		{Title: "Mechanical Engineer", Company: "MechCo"},
 	}
 
-	filtered := filterResults(jobs)
+	blockedPosters := map[string]bool{
+		"DataAnnotation": true,
+		"Jobs via Dice":  true,
+		"Jobot":          true,
+	}
+	filtered := filterResults(jobs, blockedPosters)
 
 	expected := map[string]bool{
 		"Senior Golang Engineer": true,
@@ -145,7 +150,7 @@ func TestFilterResults(t *testing.T) {
 }
 
 func TestFilterResults_Empty(t *testing.T) {
-	filtered := filterResults([]Job{})
+	filtered := filterResults([]Job{}, nil)
 	if len(filtered) != 0 {
 		t.Errorf("expected 0 jobs, got %d", len(filtered))
 	}
@@ -156,7 +161,8 @@ func TestFilterResults_AllBlocked(t *testing.T) {
 		{Title: "Junior Developer", Company: "SomeCo"},
 		{Title: "Software Engineer", Company: "DataAnnotation"},
 	}
-	filtered := filterResults(jobs)
+	blockedPosters := map[string]bool{"DataAnnotation": true}
+	filtered := filterResults(jobs, blockedPosters)
 	if len(filtered) != 0 {
 		t.Errorf("expected 0 jobs, got %d", len(filtered))
 	}
